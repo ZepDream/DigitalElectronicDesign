@@ -1,0 +1,64 @@
+# ============================================================
+# CPLD / FPGA 课程工程 - 通用忽略规则
+# 原则:源码和工程配置进仓库,编译产物不进
+# ============================================================
+
+# ---------- Quartus 编译产物 ----------
+db/
+incremental_db/
+output_files/
+greybox_tmp/
+*.qws
+*.qdb
+*.smsg
+*.rpt
+*.summary
+*.jdi
+*.pin
+*.sof
+*.pof
+*.sopcinfo
+*.cmp
+*.qws.*
+
+# ---------- Quartus 备份 ----------
+*.bak
+*.qpf.bak
+
+# ---------- ModelSim / 仿真 ----------
+work/
+modelsim.ini
+transcript
+vsim.wlf
+*.vstf
+*.wlf
+*.vcd
+wave.do
+
+# ---------- Keil / MDK 编译产物 ----------
+Objects/
+Listings/
+DebugConfig/
+*.o
+*.crf
+*.d
+*.axf
+*.lnp
+*.dep
+*.sct
+*.map
+*.lst
+*.htm
+*.uvguix.*
+*.uvguix
+
+# ---------- VS Code / 编辑器临时文件 ----------
+.vscode/*.log
+*.swp
+*~
+
+# ---------- 操作系统垃圾 ----------
+Thumbs.db
+desktop.ini
+.DS_Store
+$RECYCLE.BIN/
