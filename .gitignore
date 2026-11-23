@@ -52,6 +52,14 @@ DebugConfig/
 *.uvguix.*
 *.uvguix
 
+# ---------- 大体积媒体文件(不进仓库,另行备份) ----------
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.flv
+*.wmv
+
 # ---------- VS Code / 编辑器临时文件 ----------
 .vscode/*.log
 *.swp
