@@ -34,6 +34,8 @@ vsim.wlf
 *.wlf
 *.vcd
 wave.do
+# ModelSim 波形初始文件(与 vsim.wlf 同尺寸, 运行即重新生成)
+wlftrt*
 
 # ---------- Keil / MDK 编译产物 ----------
 Objects/
