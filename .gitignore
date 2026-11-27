@@ -39,6 +39,7 @@ wlftrt*
 
 # ---------- Keil / MDK 编译产物 ----------
 Objects/
+build.log
 Listings/
 DebugConfig/
 *.o
