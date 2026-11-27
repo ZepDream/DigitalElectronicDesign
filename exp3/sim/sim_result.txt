@@ -1,5 +1,5 @@
-﻿Model Technology ModelSim SE-64 vlog 10.6e Compiler 2018.06 Jun 23 2018
-Start time: 22:31:22 on Nov 23,2026
+Model Technology ModelSim SE-64 vlog 10.6e Compiler 2018.06 Jun 23 2018
+Start time: 15:23:57 on Nov 27,2026
 vlog -work work ..\rtl\spi_master.v ..\rtl\spi_slave.v ..\rtl\spi_top.v ..\tb\tb_spi_top.v 
 -- Compiling module spi_master
 -- Compiling module spi_slave
@@ -8,14 +8,14 @@ vlog -work work ..\rtl\spi_master.v ..\rtl\spi_slave.v ..\rtl\spi_top.v ..\tb\tb
 
 Top level modules:
 	tb_spi_top
-End time: 22:31:22 on Nov 23,2026, Elapsed time: 0:00:00
+End time: 15:23:57 on Nov 27,2026, Elapsed time: 0:00:00
 Errors: 0, Warnings: 0
-Reading G:/APP/modeltech64_10.6e/tcl/vsim/pref.tcl
+Reading C:/ZZJ/APP/modeltech64_10.6e/tcl/vsim/pref.tcl
 
 # 10.6e
 
 # vsim -c work.tb_spi_top -do "run -all; quit -f" 
-# Start time: 22:31:22 on Nov 23,2026
+# Start time: 15:24:00 on Nov 27,2026
 # ** Warning: (vsim-8891) All optimizations are turned off because the -novopt switch is in effect. This will cause your simulation to run very slowly. If you are using this switch to preserve visibility for Debug or PLI features please see the User's Manual section on Preserving Object Visibility with vopt.
 # //  ModelSim SE-64 10.6e Jun 23 2018
 # //
@@ -58,7 +58,7 @@ Reading G:/APP/modeltech64_10.6e/tcl/vsim/pref.tcl
 # --------------------------------------------------
 # RESULT: PASS - 20 frames checked, 0 errors
 # --------------------------------------------------
-# ** Note: $finish    : ../tb/tb_spi_top.v(130)
+# ** Note: $finish    : ../tb/tb_spi_top.v(145)
 #    Time: 372810 ns  Iteration: 0  Instance: /tb_spi_top
-# End time: 22:31:23 on Nov 23,2026, Elapsed time: 0:00:01
+# End time: 15:24:01 on Nov 27,2026, Elapsed time: 0:00:01
 # Errors: 0, Warnings: 1

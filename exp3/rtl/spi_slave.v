@@ -1,70 +1,86 @@
 `timescale 1ns / 1ps
 //=============================================================================
-// spi_slave.v : 16-bit SPI slave with 50 MHz edge detection
+// spi_slave.v —— 16 位 SPI 从机（50 MHz 时钟 + 边沿检测）
 //
-//   SCK and CS are asynchronous to clk, so they are synchronized by two
-//   flip-flops.  A rising/falling edge is turned into a one-cycle pulse by
-//   comparing the two synchronized versions.
+// 【为什么从机不能直接用 SCK/CS 当时钟】
+//   SCK、CS 由主机产生，相对本模块的 50 MHz 时钟是异步信号。如果直接拿它们
+//   当触发器时钟，会引入跨时钟域问题，仿真里容易出竞争、实际电路里会亚稳态。
+//   所以这里统一用系统时钟采样，再用「两级同步 + 前后拍比较」把边沿变成
+//   一个时钟宽的脉冲，这样每个真实边沿只会被响应一次。
 //
-//   - CS falling : clear input shifter, load output shifter with tx_data
-//   - SCK falling: sample MOSI
-//   - SCK rising : shift MISO out (MSB first)
-//   - CS rising  : latch the received command, then prepare the response
-//                  that will be returned in the NEXT frame
+// 【一次完整帧里从机做什么】
+//   CS 下降沿：清空输入移位寄存器，把上一帧准备好的 tx_data 装入输出移位寄存器
+//   SCK 下降沿：采样 MOSI，移入输入移位寄存器最低位（MSB first）
+//   SCK 上升沿：输出移位寄存器左移，MISO 取最高位送出
+//   CS 上升沿：锁存收到的命令，并按命令查表准备好「下一帧」要返回的响应
 //
-//   Response table (command -> response):
-//       0x0000 -> 0x1111
-//       0x0004 -> 0x2222
-//       0x0008 -> 0x3333
-//       0x000A -> 0x4444
-//       others -> 0xA5A5
+// 【响应为什么晚一帧】
+//   从机必须等 CS 上升、16 位命令全部收齐，才知道该回答什么；而这一帧的
+//   MISO 早就发完了。所以响应只能在下一帧发回，这是固定的一帧流水线延迟。
+//
+// 【响应表（命令 -> 下一帧返回的响应）】
+//   0x0000 -> 0x1111      0x0004 -> 0x2222
+//   0x0008 -> 0x3333      0x000A -> 0x4444
+//   其它   -> 0xA5A5
 //=============================================================================
 module spi_slave (
-    input  wire        clk,
-    input  wire        rst_n,
+    input  wire        clk,          // 系统时钟 50 MHz
+    input  wire        rst_n,        // 异步复位，低有效
 
-    input  wire        sck,
-    input  wire        cs,
-    input  wire        mosi,
-    output wire        miso,
+    input  wire        sck,          // 来自主机的 SPI 时钟（异步，需同步后使用）
+    input  wire        cs,           // 来自主机的片选，低有效（异步）
+    input  wire        mosi,         // 主机发来的数据
+    output wire        miso,         // 从机返回的数据
 
-    output reg  [15:0] rx_data,      // last command received from the master
-    output reg  [15:0] tx_data       // response that will be sent next frame
+    output reg  [15:0] rx_data,      // 最近一次收到的命令，CS 上升沿更新
+    output reg  [15:0] tx_data       // 下一帧要返回的响应，CS 上升沿查表得到
 );
 
     //------------------------------------------------------------------
-    // Two-stage synchronizers and edge pulses
+    // 两级同步器 + 边沿检测
+    //   cs_sync[0] / sck_sync[0] 是打一拍后的值，[1] 是打两拍后的值。
+    //   用「上一拍为 1、这一拍为 0」判断下降沿，得到单周期脉冲；
+    //   反过来就是上升沿。打两拍是为了让亚稳态有机会恢复，同时保证四个
+    //   脉冲互不重叠，一个真实边沿只产生一个脉冲。
     //------------------------------------------------------------------
     reg [1:0] cs_sync;
     reg [1:0] sck_sync;
 
-    wire cs_fall  =  cs_sync[1] & ~cs_sync[0];
-    wire cs_rise  = ~cs_sync[1] &  cs_sync[0];
-    wire sck_fall =  sck_sync[1] & ~sck_sync[0];
-    wire sck_rise = ~sck_sync[1] &  sck_sync[0];
+    wire cs_fall  =  cs_sync[1] & ~cs_sync[0];   // CS  下降沿，单周期脉冲
+    wire cs_rise  = ~cs_sync[1] &  cs_sync[0];   // CS  上升沿，单周期脉冲
+    wire sck_fall =  sck_sync[1] & ~sck_sync[0]; // SCK 下降沿，单周期脉冲
+    wire sck_rise = ~sck_sync[1] &  sck_sync[0]; // SCK 上升沿，单周期脉冲
 
-    reg [15:0] shifter_in;
-    reg [15:0] shifter_out;
-    reg [4:0]  bit_cnt;
+    reg [15:0] shifter_in;           // 输入移位寄存器：接收 MOSI
+    reg [15:0] shifter_out;          // 输出移位寄存器：发送 MISO
+    reg [4:0]  bit_cnt;              // 已接收位数，0 ~ 16（16 表示已收满）
 
+    // MISO 直接取输出移位寄存器的最高位，硬件上就是一根线，不需要额外逻辑
     assign miso = shifter_out[15];
 
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
+            // 复位：CS/SCK 同步器预置为高（空闲电平），避免上电误判成边沿；
+            // 输出移位寄存器预置 0xF00F，作为第 0 帧返回的“从机在位”标志。
             cs_sync    <= 2'b11;
             sck_sync   <= 2'b11;
             shifter_in <= 16'h0000;
             shifter_out<= 16'hF00F;
             rx_data    <= 16'h0000;
-            tx_data    <= 16'hF00F;   // idle pattern returned in frame 0
+            tx_data    <= 16'hF00F;   // 第 0 帧返回的初值（此时还没收到任何命令）
             bit_cnt    <= 5'd0;
         end else begin
+            // 每个时钟都采样一次总线电平，这就是两级同步器
             cs_sync  <= {cs_sync[0],  cs};
             sck_sync <= {sck_sync[0], sck};
 
             //--------------------------------------------------------------
-            // Frame start: clear the input shifter and load the response
-            // that was prepared at the end of the previous frame.
+            // 帧首：CS 下降沿
+            //   清空输入移位寄存器（准备收新的一帧），
+            //   把上一帧结束时算好的响应装入输出移位寄存器，
+            //   位计数清零。
+            // 注意这里装的是 tx_data，所以 MISO 从帧首开始就是稳定的响应值，
+            // 第一位在半个周期后才会被主机采走，建立时间充足。
             //--------------------------------------------------------------
             if (cs_fall) begin
                 shifter_in  <= 16'h0000;
@@ -73,7 +89,10 @@ module spi_slave (
             end
 
             //--------------------------------------------------------------
-            // Sample MOSI on the falling edge of SCK (16 bits, MSB first)
+            // SCK 下降沿：采样 MOSI（16 位，MSB first）
+            //   cs_sync[1] 为低表示当前确实处在片选有效期间，避免 CS 为高时
+            //   的 SCK 毛刺被误当成数据；
+            //   bit_cnt < 16 的条件保证 16 个下降沿之后不再多移一位。
             //--------------------------------------------------------------
             if (sck_fall && !cs_sync[1] && (bit_cnt < 5'd16)) begin
                 shifter_in <= {shifter_in[14:0], mosi};
@@ -81,14 +100,20 @@ module spi_slave (
             end
 
             //--------------------------------------------------------------
-            // Shift MISO out on the rising edge of SCK
+            // SCK 上升沿：输出移位寄存器左移一位，MISO 自动换成下一位
+            //   与主机“上升沿更新 MOSI”对齐，双方各自在对方的稳定期采样。
             //--------------------------------------------------------------
             if (sck_rise && !cs_sync[1] && (bit_cnt < 5'd16)) begin
                 shifter_out <= {shifter_out[14:0], 1'b0};
             end
 
             //--------------------------------------------------------------
-            // End of frame: latch the command and prepare the next response
+            // 帧尾：CS 上升沿
+            //   1) 锁存本帧收到的命令到 rx_data
+            //   2) 按命令查表算出响应，存进 tx_data，等下一帧 CS 下降时装载
+            // 这里直接对 shifter_in 判断而不是对 rx_data 判断：
+            // rx_data 在同一拍才被赋值，用非阻塞赋值读到的还是旧值，
+            // 判断 rx_data 会导致响应又晚一帧（两帧延迟）。
             //--------------------------------------------------------------
             if (cs_rise) begin
                 rx_data <= shifter_in;
@@ -97,7 +122,7 @@ module spi_slave (
                     16'h0004: tx_data <= 16'h2222;
                     16'h0008: tx_data <= 16'h3333;
                     16'h000A: tx_data <= 16'h4444;
-                    default : tx_data <= 16'hA5A5;
+                    default : tx_data <= 16'hA5A5;   // 未定义命令统一回 0xA5A5
                 endcase
             end
         end

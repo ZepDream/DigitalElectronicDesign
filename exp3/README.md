@@ -1,6 +1,6 @@
 # 实验三：SPI 主机 / 从机通信的 ModelSim 仿真
 
-> 仿真工具：**ModelSim SE-64 10.6e**（`G:\APP\modeltech64_10.6e`）  
+> 仿真工具：**ModelSim SE-64 10.6e**（脚本自动探测安装位置，也可用环境变量 `MODELTECH` 指定）  
 > 设计语言：Verilog-2001  
 > 顶层：`spi_top`（主机 + 从机回环）  
 > 验证方式：自检查 testbench，20 帧全部通过（0 error）  
@@ -46,6 +46,8 @@ exp3/
 │  ├─ spi_wave.do         ModelSim 波形窗口信号分组与显示设置
 │  ├─ run_sim.bat         批处理编译 + 仿真（命令行输出验证结果）
 │  ├─ run_gui.bat         编译 + 打开 ModelSim GUI 并显示波形
+│  ├─ open_project.bat    打开 exp3.mpf 工程
+│  ├─ make_project.bat    在本机重建 exp3.mpf（源文件写成相对路径）
 │  └─ sim_result.txt      本次仿真的完整命令行记录
 ├─ images/
 │  ├─ wave_overview.png   帧级波形：CS/SCK 突发、命令自加 1
@@ -53,7 +55,7 @@ exp3/
 │  ├─ wave_response.png   命令—响应波形：0x2222 / 0x3333 / 0x4444
 │  └─ tutorial_*.png      零基础教程用的示意图和界面截图
 ├─ 教程-零基础完成SPI仿真.md   面向初学者的完整教程
-├─ exp3.mpf               ModelSim 工程文件（本机绝对路径）
+├─ exp3.mpf               ModelSim 工程文件（源文件条目为相对路径）
 └─ README.md
 ```
 
@@ -163,13 +165,41 @@ wire sck_rise = ~sck_sync[1] &  sck_sync[0];
 ### 6.1 一键运行
 
 ```text
-exp3\sim\run_sim.bat     命令行模式：编译 + 运行 + 打印 PASS/FAIL
-exp3\sim\run_gui.bat     图形模式：编译 + 打开 Wave 窗口，运行到 300 µs
+exp3\sim\run_sim.bat      命令行模式：编译 + 运行 + 打印 PASS/FAIL
+exp3\sim\run_gui.bat      图形模式：编译 + 打开 Wave 窗口，运行到 300 µs
+exp3\sim\open_project.bat 打开 exp3.mpf 工程（等价于双击 mpf，用于未关联文件类型时）
+exp3\sim\make_project.bat 在本机重建 exp3.mpf（源文件写成相对路径）
 ```
 
-两个脚本都会把 `G:\APP\modeltech64_10.6e\win64` 加到 `PATH`；如果 ModelSim 安装在其他位置，只需修改脚本开头的 `MODELTECH`。
+脚本本身不写死任何绝对路径，运行时会打印实际使用的 `vsim.exe`：
 
-### 6.2 手工命令
+```text
+[ModelSim] <ModelSim 安装目录>\win64\vsim.exe
+```
+
+ModelSim 的定位顺序是：环境变量 `MODELTECH` → 脚本内置候选路径列表 → `PATH` 上已有的 `vsim`。所以：
+
+- 换到其他电脑：`set MODELTECH=<你的 ModelSim 目录>\win64` 后再运行脚本，无需改脚本；
+- 只有 Quartus 自带的 ModelSim-Altera ASE 10.5b 也能跑（脚本候选列表里已包含），已在 10.5b 上实测 20 帧同样 `PASS`。
+
+### 6.2 路径说明（全部相对路径）
+
+仓库里所有文件都不依赖本机绝对路径，`git clone` 到任何目录都能直接用：
+
+| 位置 | 路径写法 |
+| --- | --- |
+| `run_sim.bat` / `run_gui.bat` / `open_project.bat` | `cd /d "%~dp0"` 切到脚本所在目录，源文件用 `..\rtl\xxx.v` |
+| `exp3.mpf` | 源文件条目为 `rtl/spi_master.v`、`tb/tb_spi_top.v` 等相对路径，`others` 为 `$MODEL_TECH/../modelsim.ini` |
+| `spi_wave.do` | 只写信号层次名，不含路径 |
+
+有一点要注意：**ModelSim 打开工程后保存时，会把这些相对路径改写成它所在机器的绝对路径**（`ForceSoftPaths = 1` 也挡不住，这是它的保存行为）。所以打开过一次之后 `git status` 里会出现 `exp3.mpf` 的改动，两种处理方式：
+
+```bat
+git checkout -- exp3/exp3.mpf     :: 直接丢弃这次改写
+exp3\sim\make_project.bat         :: 或者在本机重新生成一份相对路径的工程文件
+```
+
+### 6.3 手工命令
 
 在 `exp3\sim` 目录下执行：
 
@@ -186,7 +216,13 @@ vsim -c work.tb_spi_top -do "run -all; quit -f"
 vsim -gui -voptargs=+acc work.tb_spi_top -do "do spi_wave.do; run 300us"
 ```
 
-也可以直接双击 `exp3.mpf` 打开 ModelSim 工程（工程内记录的是本机绝对路径），然后手动编译、仿真并 `do sim/spi_wave.do`。
+也可以打开 `exp3.mpf` 工程（源文件为相对路径，换机器不需要重建）：
+
+```bat
+exp3\sim\open_project.bat
+```
+
+工程打开后手动 `Compile > Compile All`，再执行 `do sim/spi_wave.do` 和 `run 300us`。如果 `.mpf` 已经和 ModelSim 关联，直接双击也可。
 
 ### 6.3 testbench 的检查内容
 
@@ -291,5 +327,6 @@ RESULT: PASS - 20 frames checked, 0 errors
 ## 十、备注
 
 - 与课件中的参考代码相比，本设计把数据宽度改为 16 位，并把“采样沿”和“更新沿”分到下降沿 / 上升沿，避免异步边沿检测带来的竞争；同时把课件的 `case (rx_dat[15:0])` 改为直接对 `shifter_in` 判断，避免非阻塞赋值读到旧值导致的两帧延迟。
-- `exp3.mpf` 由 ModelSim 自动生成，内部记录的是本机绝对路径；如果整个目录换到其他电脑，建议用 `run_sim.bat` / `run_gui.bat`，或重新建立工程后添加 `rtl`、`tb` 下的 4 个 `.v` 文件。
+- `exp3.mpf` 由 ModelSim 自动生成。仓库中的副本已把源文件条目改成相对路径（`rtl/spi_master.v` 等），整个 `exp3` 目录可以随意移动或 `git clone` 到任意位置；但 ModelSim 保存工程时仍会写回本机绝对路径，发现 `git status` 里 mpf 有改动时，用 `git checkout -- exp3/exp3.mpf` 丢弃，或运行 `sim\make_project.bat` 重新生成。
+- 源文件注释均为中文。`.bat` 批处理保留英文注释：cmd 按字节解析批处理，UTF-8 中文会把语句拆坏（实测会报 `'pf' 不是内部或外部命令`），而 GBK 中文在 GitHub 上又显示为乱码，因此脚本注释统一用英文，设计源码和波形脚本用中文。
 - `.gitignore` 已忽略 `work/`、`*.wlf`、`*.vcd` 等仿真产物，仓库中只保留源码、脚本、工程文件、波形截图和结果记录。

@@ -32,7 +32,7 @@
 打开文件资源管理器，进入：
 
 ```text
-G:\Programs\Course\DigitalElectronicDesign\exp3\sim
+exp3\sim
 ```
 
 双击 **`run_sim.bat`**。会弹出一个黑色命令行窗口，自动做四件事：
@@ -66,7 +66,7 @@ G:\Programs\Course\DigitalElectronicDesign\exp3\sim
 
 ![ModelSim 界面分区](images/tutorial_modelsim_layout.png)
 
-> 如果双击后窗口一闪而过，多半是 ModelSim 安装路径不同。用记事本打开 `run_sim.bat` / `run_gui.bat`，把 `set MODELTECH=G:\APP\modeltech64_10.6e\win64` 改成你电脑上的 `win64` 目录即可。
+> 如果双击后窗口一闪而过，多半是 ModelSim 安装路径不同。脚本会依次尝试环境变量 `MODELTECH`、内置的候选路径（几个常见安装位置）、以及 `PATH` 上已有的 `vsim`，并打印实际使用的 `vsim.exe`。都找不到时，在命令行先执行 `set MODELTECH=你的ModelSim目录\win64`，再运行脚本即可。
 
 先不用管每个按钮，只要知道：
 
@@ -564,7 +564,7 @@ exp3/
 
 ### 5.2 方法 A：打开现成工程
 
-1. 双击 `exp3\exp3.mpf`；
+1. 双击 `exp3\exp3.mpf`（若 `.mpf` 没有关联到 ModelSim，双击 `exp3\sim\open_project.bat`）；
 2. ModelSim 会打开 **Project** 窗口，里面列出 4 个 `.v` 文件；
 3. 如果文件左边没有绿色对勾，说明还没编译：点 **Compile → Compile All**；
 4. 点 **Simulate → Start Simulation**，展开 `work`，选 `tb_spi_top`，点 OK；
@@ -575,7 +575,7 @@ Project 窗口长这样：
 
 ![ModelSim 工程窗口](images/tutorial_project.png)
 
-> 注意：`exp3.mpf` 里记录的是本机绝对路径。如果把整个目录换到别的电脑，建议用方法 B 重新建工程，或者用方法 C 的脚本。
+> 注意：`exp3.mpf` 里记录的是工程文件的路径。仓库中的副本用的是相对路径（`rtl/spi_master.v` 等），`git clone` 到任何目录都能直接打开；但 ModelSim 保存工程时会把它改写成本机绝对路径，这时用 `git checkout -- exp3/exp3.mpf` 丢弃改动，或运行 `sim\make_project.bat` 重新生成即可。
 
 ### 5.3 方法 B：从零新建工程
 
@@ -586,7 +586,7 @@ Project 窗口长这样：
 3. 菜单 **File → New → Project**；
 4. 在弹出的对话框里填：
    - **Project Name**：`exp3`
-   - **Project Location**：`G:\Programs\Course\DigitalElectronicDesign\exp3`
+   - **Project Location**：`<你存放工程的路径>\exp3`（例如 `D:\eda\DigitalElectronicDesign\exp3`）
    - **Default Library Name**：`work`
 5. 点 **OK**。
 

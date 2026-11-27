@@ -72,3 +72,12 @@ Thumbs.db
 desktop.ini
 .DS_Store
 $RECYCLE.BIN/
+
+# ---------- WorkBuddy 工程数据 ----------
+.workbuddy/
+
+# ---------- ModelSim 工程被改写后的备份 ----------
+*.mpf.bak
+
+# ---------- ModelSim 编译报告 ----------
+*.cr.mti
