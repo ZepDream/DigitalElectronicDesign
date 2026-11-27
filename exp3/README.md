@@ -3,7 +3,8 @@
 > 主机：**Keil + STM32F103C8T6**，4 个普通 GPIO 模拟 SPI（软件 SPI）
 > 从机：**Quartus + EPM240T100C5**，Verilog 写一个 50 MHz 同步的 SPI 从机
 > 仿真：**ModelSim**，主机模型 + 从机 + 顶层，内容自加 1 跑 12 帧
-> 教程：[教程-零基础完成SPI通信.md](教程-零基础完成SPI通信.md)
+> 教程：[教程-零基础完成SPI通信.md](教程-零基础完成SPI通信.md)（原理与代码）
+> 图文操作：[教程-图形界面仿真与断点.md](教程-图形界面仿真与断点.md)（ModelSim / Keil 纯鼠标步骤 + 截图）
 
 ## 一、任务
 
@@ -130,31 +131,53 @@ end
 
 ## 六、主机：`master_stm32/HARDWARE/SPI/`
 
-`spi.h` 只做两件事：引脚宏定义 + 声明两个函数，换板只改这里。
+命名和结构与课件第 3～4 页一致：`SPI_GPIO_BANK` / `SPI_Pin_MOSI` / `SPI_MOSI_1` …，函数拆成 `SPI_WriteData()`、`SPI_ReadData()` 和带 CS 帧的 `SPI_WriteMsg()`、`SPI_ReadMsg()`。换板只改 `spi.h` 里的宏。
 
 ```c
-#define SPI_CS_PORT   GPIOC
-#define SPI_CS_PIN    GPIO_Pin_13
-#define SPI_CS_H()    GPIO_SetBits(SPI_CS_PORT, SPI_CS_PIN)
-#define SPI_CS_L()    GPIO_ResetBits(SPI_CS_PORT, SPI_CS_PIN)
-#define SPI_MISO      GPIO_ReadInputDataBit(SPI_MISO_PORT, SPI_MISO_PIN)
+#define SPI_GPIO_BANK   GPIOC
+#define SPI_Pin_MOSI    GPIO_Pin_15
+#define SPI_Pin_MISO    GPIO_Pin_0
+#define SPI_Pin_CS      GPIO_Pin_13
+#define SPI_Pin_SCK     GPIO_Pin_14
+#define SPI_MOSI_1      GPIO_SetBits(SPI_GPIO_BANK, SPI_Pin_MOSI)
+#define SPI_SCK_0       GPIO_ResetBits(SPI_GPIO_BANK, SPI_Pin_SCK)
+#define SPI_MISO        GPIO_ReadInputDataBit(SPI_MISO_BANK, SPI_Pin_MISO)
 ```
 
-`spi.c` 的收发一帧就 4 步（写的同时把从机的数据读回来）：
+课件的四根线都在 GPIOA，本实验 CS/SCK/MOSI 在 GPIOC、MISO 在 GPIOA，所以多了一个 `SPI_MISO_BANK` 宏；其它名字保持原样。课件代码没有延时，这里在每步之间加了 `SPI_DELAY_US = 2`（SCK 约 200 kHz），否则 CPLD 采不稳。
+
+**写函数和读函数是分开的**（这是课件第 3 页的结构，比把收发合在一个函数里直观）：
 
 ```c
-SPI_CS_L();
-for (i = 0; i < 16; i++) {
-    if (tx_dat & 0x8000) SPI_MOSI_H(); else SPI_MOSI_L();  // 1. SCK 高时摆数据
-    tx_dat <<= 1;
-    delay_us(2);
-    SPI_SCK_L();                                            // 2. 下降沿
-    rx_dat = (rx_dat << 1) | SPI_MISO;                      //    主机同时采样
-    delay_us(2);
-    SPI_SCK_H();                                            // 3. 上升沿，从机移位
+void SPI_WriteData(uint16_t Data)
+{
+    unsigned char i;
+    for (i = 16; i > 0; i--) {
+        if (Data & 0x8000) SPI_MOSI_1; else SPI_MOSI_0;  // 先摆数据
+        delay_us(SPI_DELAY_US);
+        SPI_SCK_0;  delay_us(SPI_DELAY_US);              // 下降沿：从机采样
+        SPI_SCK_1;  delay_us(SPI_DELAY_US);              // 上升沿：从机移位
+        Data <<= 1;
+    }
 }
-SPI_CS_H();
+
+uint16_t SPI_ReadData(void)
+{
+    unsigned char i;
+    unsigned char rxd;
+    uint16_t Data = 0;
+    for (i = 16; i > 0; i--) {
+        Data <<= 1;
+        rxd = SPI_MISO;
+        if (rxd == 1) Data |= 0x01;                      // 读 MISO
+        SPI_SCK_0;  delay_us(SPI_DELAY_US);
+        SPI_SCK_1;  delay_us(SPI_DELAY_US);
+    }
+    return Data;
+}
 ```
+
+`SPI_WriteMsg()` / `SPI_ReadMsg()` 各自拉低一次 CS、走一帧、再拉高 CS；课件从机要的 `0x789A` 帧头在代码里保留但注释掉了（本实验 CPLD 只认 16 位）。早期把读写合在一起的版本 `SPI_WriteRead()` 整段保留为注释，方便对照。
 
 `main.c` 就是课件要求的“输出字符”：
 
@@ -163,17 +186,18 @@ const u16 CHAR_TAB[] = { 0x0000, 0x0004, 0x0008, 0x000A, 0x0055, 0x00AA };
 
 while (1) {
     g_tx = CHAR_TAB[i];
-    g_rx = SPI_WriteRead(g_tx);        // 发一个字符，同时收回响应
+    SPI_WriteMsg(g_tx, 1);      // 写一帧：发出这个字符
+    SPI_ReadMsg(&g_rx, 1);      // 读一帧：收回上一条字符的响应
     i = (i + 1) % 6;
     delay_ms(200);
 }
 ```
 
-编译结果：**0 error、0 warning**，代码 1.3 KB + 常量 0.3 KB，RAM 约 1.7 KB。
+编译结果：**0 error、0 warning**，代码 1.46 KB + 常量 0.28 KB，RAM 约 1.7 KB。
 
 ## 七、仿真
 
-主机模型 `tb/spi_master.v` 的时序和 `spi.c` 完全一样，只是用 `#` 延时来写；`spi_top.v` 把主机和从机连起来。
+主机模型 `tb/spi_master.v` 的**位级时序**和 `SPI_WriteData()` / `SPI_ReadData()` 一样（16 位、MSB first、SCK 空闲高、下降沿采样），只是用 `#` 延时来写。为了在一帧波形里同时看到收发，仿真主机把“写”和“读”合成一帧；C 程序里则是两个独立函数、两次 CS，学习时更清楚。`spi_top.v` 把主机和从机连起来。
 
 ```text
 exp3\sim\run_sim.bat      命令行：编译 + 跑完 12 帧 + 打印结果

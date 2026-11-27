@@ -137,64 +137,116 @@ Keil 里 `Project → Open Project` 选 `exp3\master_stm32\Exp3_SPI.uvprojx`，�
 
 工程里只有 4 个需要看的文件：`SPI.h`、`SPI.c`、`main.c`，其余是标准库。
 
-### 3.2 `SPI.h`：把引脚写成宏
+### 3.2 `spi.h`：宏定义按课件第 4 页写
 
 ```c
-#define SPI_CS_PORT   GPIOC
-#define SPI_CS_PIN    GPIO_Pin_13
+#define SPI_GPIO_BANK   GPIOC
+#define SPI_Pin_MOSI    GPIO_Pin_15
+#define SPI_Pin_MISO    GPIO_Pin_0
+#define SPI_Pin_CS      GPIO_Pin_13
+#define SPI_Pin_SCK     GPIO_Pin_14
 
-#define SPI_CS_H()    GPIO_SetBits(SPI_CS_PORT,   SPI_CS_PIN)
-#define SPI_CS_L()    GPIO_ResetBits(SPI_CS_PORT, SPI_CS_PIN)
-#define SPI_MISO      GPIO_ReadInputDataBit(SPI_MISO_PORT, SPI_MISO_PIN)
+#define SPI_MOSI_1      GPIO_SetBits(SPI_GPIO_BANK, SPI_Pin_MOSI)
+#define SPI_SCK_1       GPIO_SetBits(SPI_GPIO_BANK, SPI_Pin_SCK)
+#define SPI_CS_1        GPIO_SetBits(SPI_GPIO_BANK, SPI_Pin_CS)
 
-#define SPI_DELAY_US  2          /* 半周期 2us，SCK 约 200kHz */
+#define SPI_MOSI_0      GPIO_ResetBits(SPI_GPIO_BANK, SPI_Pin_MOSI)
+#define SPI_SCK_0       GPIO_ResetBits(SPI_GPIO_BANK, SPI_Pin_SCK)
+#define SPI_CS_0        GPIO_ResetBits(SPI_GPIO_BANK, SPI_Pin_CS)
+
+#define SPI_MISO        GPIO_ReadInputDataBit(SPI_MISO_BANK, SPI_Pin_MISO)
+#define SPI_DELAY_US    2       /* 半周期 2us，SCK 约 200kHz */
 ```
 
-换板子只改这个文件，`SPI.c` 和 `main.c` 一个字都不用动。
+课件里四根线都在 GPIOA；本实验 CS/SCK/MOSI 在 GPIOC、MISO 在 GPIOA，所以多了一个 `SPI_MISO_BANK` 宏，其余名字完全照课件。换板子只改这个文件。
 
-### 3.3 `SPI.c`：引脚初始化 + 收发一帧
+### 3.3 `spi.c`：写函数和读函数分开
 
-引脚初始化就是普通的 GPIO 配置：CS/SCK/MOSI 推挽输出、MISO 上拉输入，最后把 CS、SCK 置高（空闲电平）。
-
-收发一帧：
+这是课件第 3 页的结构：**输出移位寄存器对应写函数，输入移位寄存器对应读函数**，不要合在一起。
 
 ```c
-SPI_CS_L();                     /* 帧开始 */
-delay_us(SPI_DELAY_US);         /* 等从机把输出移位寄存器装好 */
+void SPI_GPIO_Config(void)      /* 引脚初始化，空闲 CS=1、SCK=1 */
+{
+    GPIO_InitTypeDef GPIO_InitStructure;
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_SPI_GPIO_BANK |
+                           RCC_APB2Periph_SPI_MISO_BANK, ENABLE);
 
-for (i = 0; i < 16; i++) {
-    if (tx_dat & 0x8000) SPI_MOSI_H(); else SPI_MOSI_L();  /* ① 摆数据 */
-    tx_dat <<= 1;
-    delay_us(SPI_DELAY_US);
+    GPIO_InitStructure.GPIO_Pin   = SPI_Pin_MOSI | SPI_Pin_SCK | SPI_Pin_CS;
+    GPIO_InitStructure.GPIO_Mode  = GPIO_Mode_Out_PP;
+    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
+    GPIO_Init(SPI_GPIO_BANK, &GPIO_InitStructure);
 
-    SPI_SCK_L();                                            /* ② 下降沿 */
-    rx_dat = (rx_dat << 1) | SPI_MISO;                      /* ③ 采样 */
-    delay_us(SPI_DELAY_US);
+    GPIO_InitStructure.GPIO_Pin  = SPI_Pin_MISO;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IPU;
+    GPIO_Init(SPI_MISO_BANK, &GPIO_InitStructure);
 
-    SPI_SCK_H();                                            /* ④ 上升沿 */
+    SPI_CS_1;
+    SPI_SCK_1;
+    SPI_MOSI_0;
 }
-
-delay_us(SPI_DELAY_US);
-SPI_CS_H();                     /* 帧结束，从机在上升沿锁存命令 */
-delay_us(SPI_GAP_US);
 ```
 
-顺序不能换，尤其 ① 必须在 ② 之前半个周期——从机检测下降沿比主机真正拉低晚 40 ns，数据要是和边沿同时变，采到的就是下一位了。
+**写函数**（和第 3 页课件对照）：
 
-### 3.4 `main.c`：输出字符
+```c
+void SPI_WriteData(uint16_t Data)
+{
+    unsigned char i;
+    for (i = 16; i > 0; i--) {
+        if (Data & 0x8000)
+            SPI_MOSI_1;                 /* 先摆数据 */
+        else
+            SPI_MOSI_0;
+        delay_us(SPI_DELAY_US);
+        SPI_SCK_0;  delay_us(SPI_DELAY_US);   /* 下降沿：从机采样 */
+        SPI_SCK_1;  delay_us(SPI_DELAY_US);   /* 上升沿：从机移位 */
+        Data <<= 1;
+    }
+}
+```
+
+**读函数**：
+
+```c
+uint16_t SPI_ReadData(void)
+{
+    unsigned char i;
+    unsigned char rxd;
+    uint16_t Data = 0;
+    for (i = 16; i > 0; i--) {
+        Data <<= 1;
+        rxd = SPI_MISO;
+        if (rxd == 1)
+            Data |= 0x01;               /* 读 MISO */
+        delay_us(SPI_DELAY_US);
+        SPI_SCK_0;  delay_us(SPI_DELAY_US);
+        SPI_SCK_1;  delay_us(SPI_DELAY_US);
+    }
+    return Data;
+}
+```
+
+> 课件把读函数写成 `void SPI_ReadData(uint16_t Data)`，靠传进去的变量带结果——C 语言是传值调用，其实带不出来。这里改成 `return Data`，函数名和循环结构保持课件原样。课件里 `Data<<=1` 放在循环最后会多移一次，这里挪到了前面。
+
+`SPI_WriteMsg()` / `SPI_ReadMsg()` 分别拉低一次 CS、走一帧、再拉高 CS。课件从机要的 `0x789A` 帧头在代码里保留但注释掉了——本实验 CPLD 只认 16 位。早期把收发合在一个函数里的 `SPI_WriteRead()` 整段保留为注释，方便你和课件对照，但**没有被调用**。
+
+顺序不能换，尤其“摆数据”必须在“SCK 拉低”之前半个周期——从机检测下降沿比主机真正拉低晚 40 ns，数据要是和边沿同时变，采到的就是下一位了。
+
+### 3.4 `main.c`：写一帧、再读一帧
 
 ```c
 const u16 CHAR_TAB[] = { 0x0000, 0x0004, 0x0008, 0x000A, 0x0055, 0x00AA };
 
 while (1) {
     g_tx = CHAR_TAB[i];
-    g_rx = SPI_WriteRead(g_tx);     /* 发一个字符，同时收回响应 */
+    SPI_WriteMsg(g_tx, 1);      /* 写一帧：发出这个字符 */
+    SPI_ReadMsg(&g_rx, 1);      /* 读一帧：收回上一条字符的响应 */
     i = (i + 1) % 6;
     delay_ms(200);
 }
 ```
 
-`g_tx`、`g_rx` 是全局变量，就是为了在调试器里看。
+`g_tx`、`g_rx` 是全局变量，就是为了在调试器里看。注意**读和写是两次独立的 CS 帧**，所以 `g_rx` 读到的是上一条命令的答案；这正是从机“响应晚一帧”的体现。
 
 ### 3.5 下载与观察
 
