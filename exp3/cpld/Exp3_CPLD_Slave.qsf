@@ -1,0 +1,45 @@
+# =============================================================================
+#  Exp3_CPLD_Slave.qsf —— EPM240T100C5（MAX II）SPI 从机
+#
+#  引脚来源：EPM240T100C5硬件连接.txt
+#     SPI_CS   IO61  PIN_61   <- STM32 PC13
+#     SPI_SCK  IO57  PIN_57   <- STM32 PC14
+#     SPI_MOSI IO55  PIN_55   <- STM32 PC15
+#     SPI_MISO IO53  PIN_53   -> STM32 PA0
+#
+#  【clk 引脚需要你自己确认】
+#     不同 EPM240 开发板的晶振接法不一样（常见是 PIN_12 的全局时钟脚），
+#     本文件先按 PIN_12 写。打开 Quartus 后到 Assignments > Pin Planner
+#     里核对一下 clk 到底接在哪个引脚，改了重新编译即可。
+#     如果板上不是 50 MHz 晶振也能直接跑：从机只检测 SCK 边沿，
+#     逻辑与时钟频率无关，频率高一些只是同步余量更大。
+# =============================================================================
+
+set_global_assignment -name FAMILY "MAX II"
+set_global_assignment -name DEVICE EPM240T100C5
+set_global_assignment -name TOP_LEVEL_ENTITY spi_slave
+set_global_assignment -name ORIGINAL_QUARTUS_VERSION 17.1
+set_global_assignment -name PROJECT_OUTPUT_DIRECTORY output_files
+
+# ---------------------------- 源文件 -----------------------------------------
+set_global_assignment -name VERILOG_FILE ../rtl/spi_slave.v
+set_global_assignment -name SDC_FILE Exp3_CPLD_Slave.sdc
+
+# ---------------------------- 器件选项 ---------------------------------------
+# 上电即用，不做“未用引脚弱上拉”，减少悬空脚的干扰
+set_global_assignment -name RESERVE_ALL_UNUSED_PINS "AS INPUT TRI-STATED"
+set_global_assignment -name ENABLE_INIT_DONE_OUTPUT OFF
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to clk
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to cs
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to sck
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to mosi
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to miso
+
+# ---------------------------- 引脚分配 ---------------------------------------
+# clk  : 50 MHz 晶振，请按板卡核对实际引脚
+set_location_assignment PIN_12 -to clk
+# 以下四个脚与 EPM240T100C5硬件连接.txt 一致
+set_location_assignment PIN_61 -to cs
+set_location_assignment PIN_57 -to sck
+set_location_assignment PIN_55 -to mosi
+set_location_assignment PIN_53 -to miso

@@ -1,8 +1,9 @@
 @echo off
 rem ============================================================
-rem  exp3 : SPI master/slave loop-back simulation (batch mode)
-rem  ModelSim SE-64 10.6e
-rem  Local install: C:\ZZJ\APP\modeltech64_10.6e\win64
+rem  exp3 : SPI loop-back (master model + EPM240 slave) -- batch mode
+rem  Compiles rtl + tb, runs the self-checking testbench and
+rem  prints PASS / FAIL in the console.
+rem  Local install: G:\APP\modeltech64_10.6e\win64
 rem  Usage: run_sim.bat            (pause at the end)
 rem         run_sim.bat nopause    (no pause, for scripting)
 rem ============================================================
@@ -20,7 +21,7 @@ if errorlevel 1 (
     echo.
     echo *** vsim.exe not found.
     echo *** Set MODELTECH to the ModelSim folder that contains vsim.exe, e.g.
-    echo ***     set MODELTECH=C:\ZZJ\APP\modeltech64_10.6e\win64
+    echo ***     set MODELTECH=G:\APP\modeltech64_10.6e\win64
     exit /b 1
 )
 rem  show the vsim that will actually be used (the first match on PATH)
@@ -33,7 +34,7 @@ rem ---------- 2. compile -------------------------------------
 if exist work rmdir /s /q work
 vlib work
 vmap work work >nul
-vlog -work work ..\rtl\spi_master.v ..\rtl\spi_slave.v ..\rtl\spi_top.v ..\tb\tb_spi_top.v
+vlog -work work ..\rtl\spi_slave.v ..\tb\spi_master.v ..\tb\spi_top.v ..\tb\tb_spi_top.v
 if errorlevel 1 goto :compile_error
 
 rem ---------- 3. run -----------------------------------------
@@ -49,11 +50,13 @@ exit /b 1
 rem ---------- helper: auto-detect the install folder ---------
 :find_modelsim
 for %%D in (
+    "G:\APP\modeltech64_10.6e\win64"
+    "D:\APP\modeltech64_10.6e\win64"
     "C:\ZZJ\APP\modeltech64_10.6e\win64"
     "C:\modeltech64_10.6e\win64"
     "C:\Programs\modeltech64_10.6e\win64"
+    "G:\APP\Quartus\17.1\modelsim_ase\win32aloem"
     "C:\intelFPGA\17.1\modelsim_ase\win32aloem"
-    "C:\ZZJ\APP\intelFPGA\17.1\modelsim_ase\win32aloem"
 ) do (
     if not defined MODELTECH if exist "%%~D\vsim.exe" set "MODELTECH=%%~D"
 )

@@ -1,7 +1,7 @@
 @echo off
 rem ============================================================
-rem  exp3 : open the ModelSim SE-64 GUI and show the SPI waves
-rem  The simulation runs to 300 us (16 complete frames) so that
+rem  exp3 : open the ModelSim SE-64 GUI and show the SPI loop-back waves
+rem  The simulation runs all 8 frames (about 764 us) so that
 rem  the Wave window can be inspected interactively.
 rem  Local install: C:\ZZJ\APP\modeltech64_10.6e\win64
 rem ============================================================
@@ -29,11 +29,11 @@ rem ---------- 2. compile -------------------------------------
 if exist work rmdir /s /q work
 vlib work
 vmap work work >nul
-vlog -work work ..\rtl\spi_master.v ..\rtl\spi_slave.v ..\rtl\spi_top.v ..\tb\tb_spi_top.v
+vlog -work work ..\rtl\spi_slave.v ..\tb\spi_master.v ..\tb\spi_top.v ..\tb\tb_spi_top.v
 if errorlevel 1 goto :compile_error
 
 rem ---------- 3. open the GUI with the wave setup -------------
-vsim -gui -voptargs=+acc work.tb_spi_top -do "do spi_wave.do; run 300us"
+vsim -gui -voptargs=+acc work.tb_spi_top -do "do spi_wave.do; run -all"
 goto :eof
 
 :compile_error
@@ -45,11 +45,13 @@ exit /b 1
 rem ---------- helper: auto-detect the install folder ---------
 :find_modelsim
 for %%D in (
+    "G:\APP\modeltech64_10.6e\win64"
+    "D:\APP\modeltech64_10.6e\win64"
     "C:\ZZJ\APP\modeltech64_10.6e\win64"
     "C:\modeltech64_10.6e\win64"
     "C:\Programs\modeltech64_10.6e\win64"
+    "G:\APP\Quartus\17.1\modelsim_ase\win32aloem"
     "C:\intelFPGA\17.1\modelsim_ase\win32aloem"
-    "C:\ZZJ\APP\intelFPGA\17.1\modelsim_ase\win32aloem"
 ) do (
     if not defined MODELTECH if exist "%%~D\vsim.exe" set "MODELTECH=%%~D"
 )

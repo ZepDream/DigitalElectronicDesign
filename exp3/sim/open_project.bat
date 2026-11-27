@@ -25,18 +25,20 @@ for /f "delims=" %%V in ('where vsim 2^>nul') do if not defined VSIM_EXE set "VS
 echo [ModelSim] %VSIM_EXE%
 
 rem  After the project is open: Compile > Compile All, then run
-rem      do sim/spi_wave.do
-rem      run 300us
-vsim -gui -do "project open ../exp3.mpf"
+rem      do spi_wave.do
+rem      run -all
+vsim -gui -do "project open exp3.mpf"
 goto :eof
 
 :find_modelsim
 for %%D in (
+    "G:\APP\modeltech64_10.6e\win64"
+    "D:\APP\modeltech64_10.6e\win64"
     "C:\ZZJ\APP\modeltech64_10.6e\win64"
     "C:\modeltech64_10.6e\win64"
     "C:\Programs\modeltech64_10.6e\win64"
+    "G:\APP\Quartus\17.1\modelsim_ase\win32aloem"
     "C:\intelFPGA\17.1\modelsim_ase\win32aloem"
-    "C:\ZZJ\APP\intelFPGA\17.1\modelsim_ase\win32aloem"
 ) do (
     if not defined MODELTECH if exist "%%~D\vsim.exe" set "MODELTECH=%%~D"
 )
